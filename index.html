@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Breathing Room</title>
+<meta name="theme-color" content="#FBF7F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1C1F21" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Breathing Room">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<style>
+:root{--bg:#FBF7F2;--card:#fff;--ink:#2F3437;--muted:#7A8085;--line:#ECE6DE;--accent:#5E8C7A;--accent-soft:#E3EFE9;--warm:#E08A5F;--warm-soft:#FBEBE2;--lav:#7D70BE;--lav-soft:#EEEBFA}
+@media (prefers-color-scheme:dark){:root{--bg:#1C1F21;--card:#26292C;--ink:#ECEDEE;--muted:#9AA0A6;--line:#34383B;--accent:#7FB3A0;--accent-soft:#2A3B35;--warm:#F0A581;--warm-soft:#3D2E27;--lav:#A99DE0;--lav-soft:#2F2B40}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg)}
+body{font-family:Nunito,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+main{max-width:560px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 18px calc(120px + env(safe-area-inset-bottom))}
+h1{font-size:27px;font-weight:800;margin:2px 0 2px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:15px;margin:0 0 16px;font-weight:600}
+.banner{border-radius:16px;padding:12px 14px;font-size:15px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-start;line-height:1.4;font-weight:600}
+.banner.lav{background:var(--lav-soft)}.banner.warm{background:var(--warm-soft)}.banner.green{background:var(--accent-soft)}
+.st{font-weight:800;font-size:12.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:24px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:10px}
+.task{display:flex;gap:12px;align-items:flex-start}
+.check{flex:none;width:28px;height:28px;border-radius:50%;border:2.5px solid var(--accent);background:none;cursor:pointer;margin-top:1px;display:grid;place-items:center;color:#fff;font-size:15px;padding:0;font-weight:800}
+.check.sm{width:22px;height:22px;font-size:12px;border-width:2px}
+.check.on{background:var(--accent)}
+.ttl{flex:1;font-size:17px;font-weight:700;line-height:1.35;cursor:pointer;word-break:break-word;min-width:0}
+.ttl.doneTxt{color:var(--muted);text-decoration:line-through;font-weight:600}
+.meta{font-size:13px;color:var(--muted);font-weight:600;margin-top:3px}
+.bar{height:6px;border-radius:6px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.indent{padding-left:40px}
+button{font:inherit;color:inherit}
+.pill{border:none;border-radius:999px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer;background:var(--accent-soft);color:var(--ink);white-space:nowrap}
+.pill.warm{background:var(--warm-soft)}.pill.lav{background:var(--lav-soft)}
+.pill.ghost{background:none;color:var(--muted);padding:9px 8px}
+.pill.solid{background:var(--accent);color:#fff}
+.pill:disabled{opacity:.55;cursor:default}
+.steps{margin:12px 0 0;padding:0 0 0 40px;list-style:none}
+.steps li{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:15.5px;font-weight:600}
+.steps li span{flex:1}
+.steps li.d span{color:var(--muted);text-decoration:line-through}
+.x{border:none;background:none;color:var(--muted);cursor:pointer;font-size:18px;padding:2px 6px;line-height:1}
+.row{display:flex;gap:8px}
+input[type=text],input[type=time],input[type=date],textarea{font:inherit;font-size:16px;font-weight:600;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;width:100%;outline:none;min-width:0}
+textarea{min-height:90px;font-size:13px;font-family:ui-monospace,Menlo,monospace;font-weight:400}
+input:focus,textarea:focus{border-color:var(--accent)}
+.dump{font-size:18px;padding:16px}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px}
+.seg button{flex:1;border:none;background:none;border-radius:999px;padding:8px 6px;font-weight:700;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--accent-soft);color:var(--ink)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{border:1.5px solid var(--line);background:none;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--muted)}
+.chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.empty{text-align:center;color:var(--muted);font-weight:600;padding:22px 10px;font-size:15px;line-height:1.5}
+.ev{display:flex;gap:12px;align-items:center}
+.ev .tm{flex:none;width:76px;font-weight:800;font-size:14px;color:var(--lav)}
+.ev .nm{flex:1;font-weight:700;font-size:16px}
+.ev.past{opacity:.5}
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+.nav .in{display:flex;max-width:560px;width:100%;gap:6px}
+.nav button{flex:1;border:none;background:none;border-radius:14px;padding:8px 4px;cursor:pointer;font-weight:800;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav button b{font-size:20px;font-weight:400}
+.nav button.on{background:var(--accent-soft);color:var(--ink)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--warm);color:#fff;font-size:11px;line-height:18px;text-align:center;margin-left:4px}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:14px;font-weight:700;font-size:15px;opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center;z-index:50}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.burst{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;z-index:60;animation:fly .8s ease-out forwards}
+@keyframes fly{to{transform:translate(var(--dx),var(--dy)) scale(.3);opacity:0}}
+.modal{position:fixed;inset:0;background:rgba(20,22,24,.55);display:flex;align-items:center;justify-content:center;z-index:40;padding:20px}
+.sheet{background:var(--card);border-radius:24px;padding:24px;max-width:380px;width:100%;text-align:center}
+.ring{width:210px;height:210px;margin:10px auto 6px;position:relative}
+.ring svg{transform:rotate(-90deg)}
+.ring .t{position:absolute;inset:0;display:grid;place-items:center;font-size:40px;font-weight:800}
+.foot{color:var(--muted);font-size:12.5px;font-weight:600;text-align:center;margin-top:28px;line-height:1.5}
+.small{font-size:13.5px;color:var(--muted);font-weight:600;line-height:1.5}
+label.file{display:inline-block}label.file input{display:none}
+.spin{display:inline-block;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.welcome{font-size:17px;line-height:1.5;font-weight:700;margin:6px 0 16px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav class="nav"><div class="in" id="nav"></div></nav>
+<div class="toast" id="toast"></div>
+<div id="modal"></div>
+
+<script>
+(function(){
+"use strict";
+var CFG=window.BR_CONFIG||{};
+var API=String(CFG.api||"").replace(/\/+$/,"");
+var KEY="breathing-room-v1", KEYK="breathing-room-key";
+var S={tasks:[],events:[],deleted:{},energy:"normal",welcomed:false,updatedAt:0};
+var view="today", openId=null, breaking={}, notice=null, sync="Saved on this phone";
+
+/* ---------- helpers ---------- */
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function pad(n){return(n<10?"0":"")+n}
+function dayKey(d){d=d||new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function fmtTime(d){return d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}
+function byId(id){for(var i=0;i<S.tasks.length;i++)if(S.tasks[i].id===id)return S.tasks[i];return null}
+function touch(x){x.mod=Date.now();return x}
+function newTask(title){return{id:uid(),title:title,created:Date.now(),mod:Date.now(),today:false,done:false,doneAt:null,steps:[],effort:""}}
+function removeItem(list,id){S.deleted[id]=Date.now();S[list]=S[list].filter(function(x){return x.id!==id})}
+var EFFORT={easy:"Easy",med:"Some focus",big:"Big lift"};
+var CHEERS=["Nice. One less thing.","Look at you go.","That counts. All of it.","Done is done. 🌿","Your brain thanks you.","Small win, real win.","Off your plate!","Momentum! 🎉"];
+
+/* ---------- key + api ---------- */
+function getKey(){
+  var q=null;try{q=new URLSearchParams(location.search).get("k")}catch(e){}
+  if(q){try{localStorage.setItem(KEYK,q)}catch(e){}return q}
+  try{return localStorage.getItem(KEYK)||""}catch(e){return""}
+}
+var APPKEY=getKey();
+function canSync(){return !!(API&&APPKEY&&API.indexOf("YOUR-")<0)}
+function api(path,method,body){
+  var ctl=typeof AbortController!=="undefined"?new AbortController():null;
+  var to=setTimeout(function(){if(ctl)ctl.abort()},20000);
+  return fetch(API+path,{method:method||"GET",headers:{"Content-Type":"application/json","X-Key":APPKEY},body:body?JSON.stringify(body):undefined,signal:ctl?ctl.signal:undefined})
+    .then(function(r){clearTimeout(to);if(!r.ok)throw new Error("HTTP "+r.status);return r.json()},function(e){clearTimeout(to);throw e});
+}
+
+/* ---------- merge (same rules as the server) ---------- */
+function merge(a,b){
+  a=a||{};b=b||{};
+  var del={};[a,b].forEach(function(s){var d=s.deleted||{};for(var k in d)if(Object.prototype.hasOwnProperty.call(d,k))del[k]=Math.max(del[k]||0,d[k])});
+  function ml(x,y){
+    var m={};(x||[]).concat(y||[]).forEach(function(t){if(!t||!t.id)return;var c=m[t.id];if(!c||(t.mod||0)>(c.mod||0))m[t.id]=t});
+    return Object.keys(m).map(function(k){return m[k]}).filter(function(t){return !(del[t.id]&&del[t.id]>=(t.mod||0))})
+      .sort(function(p,q){return (p.created||0)-(q.created||0)});
+  }
+  var newer=(a.updatedAt||0)>=(b.updatedAt||0)?a:b;
+  return{tasks:ml(a.tasks,b.tasks),events:ml(a.events,b.events),deleted:del,energy:newer.energy||"normal",
+    welcomed:!!(a.welcomed||b.welcomed),updatedAt:Math.max(a.updatedAt||0,b.updatedAt||0)};
+}
+
+/* ---------- storage + sync ---------- */
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function loadLocal(){try{var r=localStorage.getItem(KEY);if(r){var d=JSON.parse(r);if(d&&d.tasks)S=merge(d,{})}}catch(e){}}
+function tidy(){
+  var cutoff=Date.now()-30*864e5, past=Date.now()-2*864e5, tomb=Date.now()-90*864e5;
+  S.tasks=S.tasks.filter(function(t){return !(t.done&&t.doneAt&&t.doneAt<cutoff)});
+  S.events=(S.events||[]).filter(function(e){return new Date(e.start).getTime()>past});
+  for(var k in S.deleted)if(S.deleted[k]<tomb)delete S.deleted[k];
+}
+var pT=null, syncing=false, again=false;
+function setSync(s){sync=s;var f=document.getElementById("syncnote");if(f)f.textContent=s}
+function typing(){var a=document.activeElement;return !!(a&&(a.tagName==="INPUT"||a.tagName==="TEXTAREA")&&a.id!=="dumpIn")}
+function save(){S.updatedAt=Date.now();persist();clearTimeout(pT);pT=setTimeout(push,800);render()}
+function push(){
+  if(!canSync())return;
+  if(syncing){again=true;return}
+  syncing=true;
+  api("/state","PUT",S).then(function(m){
+    if(m&&m.tasks){S=merge(S,m);tidy();persist();if(!typing())render()}
+    setSync("Synced ✓");
+  },function(){setSync("Offline: saved on this phone")}).then(function(){syncing=false;if(again){again=false;push()}});
+}
+function pull(){
+  if(!canSync())return;
+  api("/state").then(function(m){
+    if(m&&m.tasks){var before=S.tasks.length;S=merge(S,m);tidy();persist();if(!typing())render();
+      var n=S.tasks.length-before;if(n>0)toast(n===1?"1 new thing from your brain dump 🎤":n+" new things from your brain dump 🎤");}
+    setSync("Synced ✓");
+    push();
+  },function(){setSync("Offline: saved on this phone")});
+}
+
+/* ---------- UI bits ---------- */
+var toastT;
+function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove("show")},2400)}
+function burst(x,y){
+  var cols=["#5E8C7A","#E08A5F","#7D70BE","#E8C25F","#6FA8DC"];
+  for(var i=0;i<16;i++){
+    var d=document.createElement("div");d.className="burst";
+    var a=Math.PI*2*i/16, r=50+Math.random()*40;
+    d.style.left=(x-5)+"px";d.style.top=(y-5)+"px";d.style.background=cols[i%cols.length];
+    d.style.setProperty("--dx",Math.cos(a)*r+"px");d.style.setProperty("--dy",Math.sin(a)*r+"px");
+    document.body.appendChild(d);setTimeout(function(n){return function(){n.remove()}}(d),850);
+  }
+  try{if(navigator.vibrate)navigator.vibrate(15)}catch(e){}
+}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)}
+function standalone(){return window.navigator.standalone===true||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)}
+
+/* ---------- calendar ---------- */
+function todaysEvents(){
+  var k=dayKey();
+  return (S.events||[]).filter(function(e){return dayKey(new Date(e.start))===k})
+    .sort(function(a,b){return (a.allDay?0:1)-(b.allDay?0:1)||new Date(a.start)-new Date(b.start)});
+}
+function nextEvent(){var now=Date.now();return todaysEvents().filter(function(e){return !e.allDay&&new Date(e.start).getTime()>now})[0]||null}
+function parseICSDate(v){
+  var m=v.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/);if(!m)return null;
+  if(!m[4])return{iso:new Date(+m[1],m[2]-1,+m[3]).toISOString(),allDay:true};
+  var d=m[7]?new Date(Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0))):new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0));
+  return{iso:d.toISOString(),allDay:false};
+}
+function parseICS(txt){
+  var lines=txt.replace(/\r?\n[ \t]/g,"").split(/\r?\n/), out=[], cur=null;
+  lines.forEach(function(l){
+    if(l==="BEGIN:VEVENT")cur={};
+    else if(l==="END:VEVENT"){if(cur&&cur.start)out.push(cur);cur=null}
+    else if(cur){
+      var i=l.indexOf(":");if(i<0)return;
+      var name=l.slice(0,i).split(";")[0], v=l.slice(i+1);
+      if(name==="SUMMARY")cur.title=v.replace(/\\n/gi," ").replace(/\\([,;\\])/g,"$1");
+      else if(name==="DTSTART"){var d=parseICSDate(v);if(d){cur.start=d.iso;cur.allDay=d.allDay}}
+      else if(name==="RRULE")cur.recurring=true;
+    }
+  });
+  return out;
+}
+
+/* ---------- views ---------- */
+function taskCard(t,ctx){
+  var open=openId===t.id, steps=t.steps||[], dn=steps.filter(function(s){return s.done}).length;
+  var h='<div class="card"><div class="task">';
+  h+='<button class="check'+(t.done?" on":"")+'" data-a="toggle" data-id="'+t.id+'" aria-label="Mark done">'+(t.done?"✓":"")+'</button>';
+  h+='<div class="ttl'+(t.done?" doneTxt":"")+'" data-a="open" data-id="'+t.id+'">'+esc(t.title);
+  var meta=[];if(t.effort)meta.push(EFFORT[t.effort]);if(steps.length)meta.push(dn+" of "+steps.length+" steps");
+  if(meta.length&&!t.done)h+='<div class="meta">'+esc(meta.join(" · "))+'</div>';
+  if(steps.length&&!t.done)h+='<div class="bar"><i style="width:'+Math.round(dn/steps.length*100)+'%"></i></div>';
+  h+='</div>';
+  if(ctx==="inbox")h+='<button class="pill" data-a="toToday" data-id="'+t.id+'">+ Today</button>';
+  h+='</div>';
+  if(open&&!t.done){
+    if(steps.length){
+      h+='<ul class="steps">';
+      steps.forEach(function(s,i){
+        h+='<li class="'+(s.done?"d":"")+'"><button class="check sm'+(s.done?" on":"")+'" data-a="step" data-id="'+t.id+'" data-i="'+i+'">'+(s.done?"✓":"")+'</button><span>'+esc(s.t)+'</span><button class="x" data-a="delStep" data-id="'+t.id+'" data-i="'+i+'" aria-label="Remove step">×</button></li>';
+      });
+      h+='</ul>';
+    }
+    h+='<div class="indent" style="margin-top:10px"><form class="row" data-f="addStep" data-id="'+t.id+'"><input type="text" placeholder="Add a tiny step…" aria-label="Add a step" enterkeyhint="done"><button class="pill" type="submit">Add</button></form></div>';
+    h+='<div class="chips indent">';
+    ["easy","med","big"].forEach(function(k){h+='<button class="chip'+(t.effort===k?" on":"")+'" data-a="effort" data-id="'+t.id+'" data-v="'+k+'">'+EFFORT[k]+'</button>'});
+    h+='</div><div class="actions indent">';
+    if(canSync())h+='<button class="pill lav" data-a="breakdown" data-id="'+t.id+'"'+(breaking[t.id]?" disabled":"")+'>'+(breaking[t.id]?'<span class="spin">✳︎</span> Thinking…':"✨ Break it down")+'</button>';
+    h+='<button class="pill" data-a="focus" data-id="'+t.id+'">⏱ Focus</button>';
+    if(ctx==="today")h+='<button class="pill warm" data-a="notToday" data-id="'+t.id+'">Not today</button>';
+    h+='<button class="pill ghost" data-a="del" data-id="'+t.id+'">Delete</button>';
+    h+='</div>';
+  }
+  return h+'</div>';
+}
+
+function renderToday(){
+  var now=new Date(), hr=now.getHours();
+  var greet=hr<12?"Good morning":hr<17?"Good afternoon":"Good evening";
+  var today=S.tasks.filter(function(t){return t.today&&!t.done});
+  var doneToday=S.tasks.filter(function(t){return t.done&&t.doneAt&&dayKey(new Date(t.doneAt))===dayKey()});
+  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done});
+  var h='<h1>'+greet+' '+(hr<17?"☀️":"🌙")+'</h1><p class="sub">'+now.toLocaleDateString([], {weekday:"long",month:"long",day:"numeric"})+'</p>';
+
+  if(!S.welcomed&&CFG.welcome){
+    h+='<div class="card"><div class="welcome">'+esc(CFG.welcome)+'</div><button class="pill solid" data-a="welcomeOk">Let\'s go</button></div>';
+  }
+  if(isIOS()&&!standalone()){
+    h+='<div class="banner green">📲<div>Make this an app: tap <b>Share</b> <span aria-hidden="true">⬆︎</span>, then <b>Add to Home Screen</b>.<br><span class="small">Then open it from the new icon on your home screen.</span></div></div>';
+  }
+  if(!APPKEY&&API&&API.indexOf("YOUR-")<0){
+    h+='<div class="banner warm">🔑<div>Not connected yet. Open <b>Settings</b> and paste your key to turn on sync, voice capture and ✨ Break it down.</div></div>';
+  }
+
+  var nx=nextEvent();
+  if(nx){
+    var mins=Math.round((new Date(nx.start)-now)/60000);
+    var when=mins<=90?"in "+mins+" min":"at "+fmtTime(new Date(nx.start));
+    h+='<div class="banner lav">🗓<div><b>'+esc(nx.title||"Event")+'</b> '+when+'.';
+    if(mins>=15&&mins<=90)h+='<br><span class="small">That\'s room for one easy task, or just a breather.</span>';
+    if(mins<15)h+='<br><span class="small">Good moment to start wrapping up and get ready.</span>';
+    h+='</div></div>';
+  }
+
+  h+='<div class="st">How\'s your energy?</div><div class="seg">';
+  [["low","🪫 Low"],["normal","🙂 Okay"],["high","⚡️ Good"]].forEach(function(e){h+='<button class="'+(S.energy===e[0]?"on":"")+'" data-a="energy" data-v="'+e[0]+'">'+e[1]+'</button>'});
+  h+='</div>';
+
+  h+='<div class="st"><span>Just these today</span><span>'+today.length+'</span></div>';
+  if(!today.length)h+='<div class="card empty">Nothing picked yet, and that\'s fine.<br>Choose 1–3 things below, or brain-dump first.</div>';
+  else today.forEach(function(t){h+=taskCard(t,"today")});
+  if(today.length>=5)h+='<div class="banner warm">🌿<div>That\'s a full plate. Anything that could wait until tomorrow?</div></div>';
+
+  var allowed=S.energy==="low"?["easy"]:S.energy==="normal"?["easy","med",undefined,""]:null;
+  var o={easy:0,med:1,big:2};
+  var sugg=inbox.filter(function(t){return !allowed||allowed.indexOf(t.effort)>=0})
+    .sort(function(a,b){return (o[a.effort]==null?1:o[a.effort])-(o[b.effort]==null?1:o[b.effort])||a.created-b.created}).slice(0,3);
+  if(today.length<5&&sugg.length){
+    h+='<div class="st">'+(S.energy==="low"?"Gentle picks for a low day":"Could fit today")+'</div>';
+    sugg.forEach(function(t){h+=taskCard(t,"inbox")});
+  }else if(S.energy==="low"&&inbox.length&&!sugg.length&&today.length<5){
+    h+='<div class="banner green">🪫<div>Low-energy day. Tag a few tasks as <b>Easy</b> in your Brain dump and they\'ll show up here.<br><span class="small">Rest counts as productive, too.</span></div></div>';
+  }
+  if(doneToday.length){
+    h+='<div class="st"><span>Done today 🌱</span><span>'+doneToday.length+'</span></div>';
+    doneToday.forEach(function(t){h+=taskCard(t,"done")});
+  }
+  h+='<p class="foot"><span id="syncnote">'+esc(sync)+'</span></p>';
+  return h;
+}
+
+function renderInbox(){
+  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done}).sort(function(a,b){return b.created-a.created});
+  var h='<h1>Brain dump 🧠</h1><p class="sub">Get it out of your head. No dates, no sorting. Just type.</p>';
+  h+='<form data-f="dump"><input class="dump" type="text" id="dumpIn" placeholder="What\'s on your mind?" aria-label="New task" autocomplete="off" enterkeyhint="done"></form>';
+  h+='<p class="small" style="margin:8px 4px 0">Tip: tap the 🎤 on your keyboard to say it instead'+(canSync()?", or press your Action Button from anywhere.":".")+'</p>';
+  h+='<div class="st"><span>Everything else</span><span>'+inbox.length+'</span></div>';
+  if(!inbox.length)h+='<div class="card empty">Your list is empty. Enjoy that. ✨</div>';
+  inbox.forEach(function(t){h+=taskCard(t,"inbox")});
+  return h;
+}
+
+function renderCal(){
+  var ev=todaysEvents(), now=Date.now();
+  var h='<h1>Today\'s shape 🗓</h1><p class="sub">Seeing the day\'s fixed points makes time feel less slippery.</p>';
+  if(!ev.length)h+='<div class="card empty">No events for today yet.</div>';
+  else{h+='<div class="card">';ev.forEach(function(e,i){
+    var past=!e.allDay&&new Date(e.start).getTime()<now;
+    h+='<div class="ev'+(past?" past":"")+'" style="'+(i?"border-top:1px solid var(--line);":"")+'padding:10px 0"><div class="tm">'+(e.allDay?"All day":fmtTime(new Date(e.start)))+'</div><div class="nm">'+esc(e.title||"Event")+'</div><button class="x" data-a="delEv" data-id="'+e.id+'" aria-label="Remove">×</button></div>';
+  });h+='</div>'}
+  h+='<div class="st">Add something</div>';
+  h+='<form data-f="ev" class="card"><input type="text" id="evT" placeholder="What is it? (e.g. Dentist)" aria-label="Event name"><div class="row" style="margin-top:8px"><input type="date" id="evD" value="'+dayKey()+'" aria-label="Date"><input type="time" id="evH" aria-label="Time"></div><div class="actions"><button class="pill solid" type="submit">Add to day</button></div></form>';
+  h+='<div class="st">Apple Calendar (beta)</div><div class="card"><p class="small" style="margin:0 0 10px">On a Mac: open Calendar, select a calendar, then <b>File → Export → Export…</b>, AirDrop the .ics file to your phone, and choose it here. Repeating events aren\'t included yet.</p>';
+  h+='<label class="file pill lav">Import .ics file<input type="file" id="ics" accept=".ics,text/calendar"></label>';
+  if(notice)h+='<p class="small" style="margin:10px 0 0">'+esc(notice)+'</p>';
+  h+='</div>';
+  return h;
+}
+
+function renderSettings(){
+  var h='<h1>Settings ⚙︎</h1><p class="sub">Behind-the-scenes stuff. You can ignore this page.</p>';
+  h+='<div class="st">Connection</div><div class="card"><p class="small" style="margin:0 0 10px">Status: <b id="syncnote">'+esc(canSync()?sync:(APPKEY?"Server address missing in config.js":"No key yet"))+'</b></p>';
+  h+='<form data-f="key" class="row"><input type="text" id="keyIn" placeholder="Paste key" value="'+esc(APPKEY)+'" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Key"><button class="pill" type="submit">Save</button></form>';
+  if(canSync())h+='<div class="actions"><button class="pill" data-a="syncNow">Sync now</button></div>';
+  h+='</div>';
+  h+='<div class="st">Backup</div><div class="card"><p class="small" style="margin:0 0 10px">Copy everything as text to keep somewhere safe, or paste a backup to restore it.</p>';
+  h+='<div class="actions" style="margin-top:0"><button class="pill" data-a="copyBackup">Copy backup</button></div>';
+  h+='<form data-f="restore" style="margin-top:12px"><textarea id="restoreIn" placeholder="Paste a backup here…" aria-label="Backup text"></textarea><div class="actions"><button class="pill warm" type="submit">Restore from backup</button></div></form></div>';
+  h+='<p class="foot">Breathing Room v1 · made with love</p>';
+  return h;
+}
+
+function render(){
+  var a=document.activeElement, keepDump=a&&a.id==="dumpIn", dumpVal=keepDump?a.value:null;
+  var app=document.getElementById("app");
+  app.innerHTML=view==="today"?renderToday():view==="inbox"?renderInbox():view==="cal"?renderCal():renderSettings();
+  if(keepDump){var d=document.getElementById("dumpIn");if(d){d.value=dumpVal;d.focus()}}
+  var inboxN=S.tasks.filter(function(t){return !t.today&&!t.done}).length;
+  var nav=[["today","☀️","Today"],["inbox","🧠","Brain dump"],["cal","🗓","Calendar"],["set","⚙︎","Settings"]];
+  document.getElementById("nav").innerHTML=nav.map(function(n){
+    return '<button class="'+(view===n[0]?"on":"")+'" data-a="nav" data-v="'+n[0]+'"><b>'+n[1]+'</b><span>'+n[2]+(n[0]==="inbox"&&inboxN?'<span class="badge">'+inboxN+'</span>':"")+'</span></button>';
+  }).join("");
+}
+
+/* ---------- focus timer ---------- */
+var tState=null;
+function openTimer(t){tState={id:t.id,title:t.title,mins:15,end:null,left:15*60,run:false,iv:null};drawTimer()}
+function drawTimer(){
+  var m=document.getElementById("modal");
+  if(!tState){m.innerHTML="";return}
+  var total=tState.mins*60, left=Math.max(0,tState.left), frac=left/total, C=2*Math.PI*92;
+  var h='<div class="modal"><div class="sheet"><div class="small">Focusing on</div><div style="font-weight:800;font-size:18px;margin-top:2px">'+esc(tState.title)+'</div>';
+  h+='<div class="ring"><svg width="210" height="210"><circle cx="105" cy="105" r="92" fill="none" stroke="var(--line)" stroke-width="14"/><circle cx="105" cy="105" r="92" fill="none" stroke="var(--accent)" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*(1-frac))+'" style="transition:stroke-dashoffset 1s linear"/></svg><div class="t">'+Math.floor(left/60)+":"+pad(left%60)+'</div></div>';
+  if(!tState.run&&!tState.end){
+    h+='<div class="seg" style="margin:8px 0 14px">';[5,10,15,25].forEach(function(n){h+='<button class="'+(tState.mins===n?"on":"")+'" data-a="tMin" data-v="'+n+'">'+n+' min</button>'});h+='</div>';
+    h+='<div class="small" style="margin-bottom:14px">Just start. You can stop any time.</div>';
+  }
+  h+='<div class="actions" style="justify-content:center">';
+  if(left===0)h+='<button class="pill solid" data-a="tDone">I did it ✓</button><button class="pill" data-a="tClose">Close</button>';
+  else h+='<button class="pill solid" data-a="tGo">'+(tState.run?"Pause":tState.end?"Resume":"Start")+'</button><button class="pill ghost" data-a="tClose">'+(tState.end?"Stop":"Cancel")+'</button>';
+  h+='</div></div></div>';
+  m.innerHTML=h;
+}
+function tick(){
+  if(!tState||!tState.run)return;
+  tState.left=Math.max(0,Math.round((tState.end-Date.now())/1000));
+  if(tState.left===0){tState.run=false;clearInterval(tState.iv);toast("Time! Nice focus. 🌟");try{if(navigator.vibrate)navigator.vibrate([200,100,200])}catch(e){}}
+  drawTimer();
+}
+
+/* ---------- AI breakdown ---------- */
+function breakdown(t){
+  if(!canSync()||breaking[t.id])return;
+  breaking[t.id]=true;render();
+  api("/breakdown","POST",{title:t.title}).then(function(r){
+    var arr=r&&r.steps;if(!Array.isArray(arr)||!arr.length)throw new Error("empty");
+    var tt=byId(t.id);if(!tt)return;
+    tt.steps=(tt.steps||[]).concat(arr.slice(0,6).map(function(s){return{t:String(s),done:false}}));touch(tt);
+    toast("Here's a way in. Just do the first one.");
+  }).catch(function(){toast("Couldn't break that down right now. Try adding a step yourself.")})
+  .then(function(){delete breaking[t.id];save()});
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",function(ev){
+  var el=ev.target.closest("[data-a]");if(!el)return;
+  var a=el.getAttribute("data-a"), id=el.getAttribute("data-id"), v=el.getAttribute("data-v"), t=id?byId(id):null;
+  switch(a){
+    case "nav":view=v;openId=null;notice=null;render();window.scrollTo(0,0);break;
+    case "open":openId=openId===id?null:id;render();break;
+    case "toggle":
+      if(!t)break;t.done=!t.done;t.doneAt=t.done?Date.now():null;touch(t);
+      if(t.done){var r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2);toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);if(openId===id)openId=null}
+      else t.today=true;
+      save();break;
+    case "toToday":if(t){t.today=true;touch(t);save();toast("Added to today.")}break;
+    case "notToday":if(t){t.today=false;touch(t);openId=null;save();toast("Moved back to your list. No guilt.")}break;
+    case "del":if(t){removeItem("tasks",id);openId=null;save()}break;
+    case "effort":if(t){t.effort=t.effort===v?"":v;touch(t);save()}break;
+    case "step":if(t){var s=t.steps[+el.getAttribute("data-i")];if(!s)break;s.done=!s.done;touch(t);
+      if(s.done){var rr=el.getBoundingClientRect();burst(rr.left+11,rr.top+11)}
+      if(t.steps.every(function(x){return x.done}))toast("All steps done! Tap the big circle to finish it.");
+      save()}break;
+    case "delStep":if(t){t.steps.splice(+el.getAttribute("data-i"),1);touch(t);save()}break;
+    case "breakdown":if(t)breakdown(t);break;
+    case "focus":if(t)openTimer(t);break;
+    case "energy":S.energy=v;save();break;
+    case "welcomeOk":S.welcomed=true;save();break;
+    case "delEv":removeItem("events",id);save();break;
+    case "syncNow":setSync("Syncing…");pull();break;
+    case "copyBackup":
+      var txt=JSON.stringify(S);
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast("Backup copied. Paste it into Notes.")},function(){toast("Couldn't copy on this device.")});
+      else toast("Couldn't copy on this device.");
+      break;
+    case "tMin":tState.mins=+v;tState.left=tState.mins*60;drawTimer();break;
+    case "tGo":
+      if(tState.run){tState.run=false;clearInterval(tState.iv);tState.left=Math.max(0,Math.round((tState.end-Date.now())/1000))}
+      else{tState.end=Date.now()+tState.left*1000;tState.run=true;clearInterval(tState.iv);tState.iv=setInterval(tick,1000)}
+      drawTimer();break;
+    case "tDone":var tt=byId(tState.id);clearInterval(tState.iv);tState=null;drawTimer();
+      if(tt&&!tt.done){tt.done=true;tt.doneAt=Date.now();touch(tt);burst(window.innerWidth/2,window.innerHeight/2);toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);save()}break;
+    case "tClose":clearInterval(tState.iv);var wasRun=!!tState.end;tState=null;drawTimer();if(wasRun)toast("Any time spent counts.");break;
+  }
+});
+document.addEventListener("submit",function(ev){
+  var f=ev.target, k=f.getAttribute("data-f");if(!k)return;ev.preventDefault();
+  if(k==="dump"){var i=document.getElementById("dumpIn"), v=i.value.trim();if(!v)return;
+    S.tasks.push(newTask(v));i.value="";save();
+    var d=document.getElementById("dumpIn");if(d)d.focus();}
+  else if(k==="addStep"){var inp=f.querySelector("input"), sv=inp.value.trim(), t=byId(f.getAttribute("data-id"));if(!sv||!t)return;
+    t.steps=t.steps||[];t.steps.push({t:sv,done:false});touch(t);save();
+    var again2=document.querySelector('form[data-f="addStep"] input');if(again2)again2.focus();}
+  else if(k==="ev"){var tl=document.getElementById("evT").value.trim(), dd=document.getElementById("evD").value, hh=document.getElementById("evH").value;
+    if(!tl||!dd){toast("Add a name and a date.");return}
+    var p=dd.split("-"), st, allDay=!hh;
+    if(hh){var q=hh.split(":");st=new Date(+p[0],p[1]-1,+p[2],+q[0],+q[1])}else st=new Date(+p[0],p[1]-1,+p[2]);
+    S.events.push({id:uid(),title:tl,start:st.toISOString(),allDay:allDay,src:"manual",created:Date.now(),mod:Date.now()});save();toast("Added.");}
+  else if(k==="key"){var kv=document.getElementById("keyIn").value.trim();APPKEY=kv;try{localStorage.setItem(KEYK,kv)}catch(e){}
+    document.activeElement.blur();toast(kv?"Key saved.":"Key removed.");render();if(canSync())pull();}
+  else if(k==="restore"){var raw=document.getElementById("restoreIn").value.trim();if(!raw)return;
+    try{var d2=JSON.parse(raw);if(!d2||!Array.isArray(d2.tasks))throw 0;
+      var now=Date.now();d2.tasks.forEach(function(x){x.mod=now});(d2.events||[]).forEach(function(x){x.mod=now});
+      S=merge(S,d2);S.updatedAt=now;tidy();save();toast("Restored ✓");}catch(e){toast("That doesn't look like a backup.")}}
+});
+document.addEventListener("change",function(ev){
+  if(ev.target.id!=="ics")return;
+  var file=ev.target.files&&ev.target.files[0];if(!file)return;
+  var rd=new FileReader();
+  rd.onload=function(){
+    try{
+      var list=parseICS(String(rd.result)), now=Date.now(), lo=now-864e5, hi=now+60*864e5, added=0, skipped=0;
+      S.events.filter(function(e){return e.src==="ics"}).forEach(function(e){S.deleted[e.id]=now});
+      S.events=S.events.filter(function(e){return e.src!=="ics"});
+      list.forEach(function(e){
+        var ts=new Date(e.start).getTime();
+        if(ts<lo||ts>hi){if(e.recurring)skipped++;return}
+        S.events.push({id:uid(),title:e.title||"Event",start:e.start,allDay:!!e.allDay,src:"ics",created:now,mod:now+1});added++;
+      });
+      notice="Imported "+added+" event"+(added===1?"":"s")+" from the next 60 days."+(skipped?" "+skipped+" repeating event"+(skipped===1?" was":"s were")+" skipped.":"");
+    }catch(e){notice="Sorry, that file couldn't be read."}
+    save();
+  };
+  rd.readAsText(file);
+});
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(!typing())render();pull()}});
+setInterval(function(){if(view!=="inbox"&&view!=="set"&&!typing()&&document.visibilityState==="visible")render()},60000);
+
+/* ---------- start ---------- */
+loadLocal();tidy();
+try{var qs=new URLSearchParams(location.search), add=qs.get("add");if(add&&add.trim()){S.tasks.push(newTask(add.trim()));S.updatedAt=Date.now();persist();setTimeout(function(){toast("Added to your brain dump ✓")},300)}
+  if(qs.has("add")){qs.delete("add");var qq=qs.toString();history.replaceState(null,"",location.pathname+(qq?"?"+qq:""))}}catch(e){}
+render();pull();
+if("serviceWorker" in navigator&&location.protocol==="https:"){navigator.serviceWorker.register("sw.js").catch(function(){})}
+})();
+</script>
+</body>
+</html>
