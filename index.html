@@ -103,9 +103,22 @@ label.file{display:inline-block}label.file input{display:none}
 var CFG=window.BR_CONFIG||{};
 var API=String(CFG.api||"").replace(/\/+$/,"");
 var KEY="breathing-room-v1", KEYK="breathing-room-key";
-var S={tasks:[],events:[],routines:[],estLog:[],deleted:{},energy:"normal",welcomed:false,updatedAt:0};
-var plan=null, planning=false;
-var LISTS=["tasks","events","routines","estLog"];
+var S={tasks:[],events:[],routines:[],estLog:[],days:[],deleted:{},energy:"normal",welcomed:false,seenDay:"",updatedAt:0};
+var plan=null, planning=false, showDone=false;
+var REPEATS=[["d1","Daily"],["w1","Weekly"],["w2","Every 2 weeks"],["m1","Monthly"]];
+function repLabel(r){for(var i=0;i<REPEATS.length;i++)if(REPEATS[i][0]===r)return REPEATS[i][1];return""}
+function keyToDate(k){var p=String(k).split("-");return new Date(+p[0],p[1]-1,+p[2])}
+function stepDate(k,r){var d=keyToDate(k);if(r==="d1")d.setDate(d.getDate()+1);else if(r==="w1")d.setDate(d.getDate()+7);else if(r==="w2")d.setDate(d.getDate()+14);else if(r==="m1")d.setMonth(d.getMonth()+1);return dayKey(d)}
+function nextDue(t){var k=stepDate(t.due||dayKey(),t.repeat),today=dayKey(),guard=0;while(k<=today&&guard++<400)k=stepDate(k,t.repeat);return k}
+function isLater(t){return !!(t.due&&t.due>dayKey()&&!t.done)}
+function niceDate(k){var d=keyToDate(k),diff=Math.round((d-keyToDate(dayKey()))/864e5);if(diff===1)return"Tomorrow";if(diff===-1)return"Yesterday";return d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}
+function dayRec(k){for(var i=0;i<(S.days||[]).length;i++)if(S.days[i].id===k)return S.days[i];return null}
+function energyNow(){var r=dayRec(dayKey());return r&&r.energy||""}
+function setEnergy(v){var k=dayKey(),r=dayRec(k);if(!r){r={id:k,created:Date.now()};S.days.push(r)}r.energy=r.energy===v?"":v;r.mod=Date.now();S.energy=r.energy||"normal"}
+var ENERGY={low:["🪫","Low","#E08A5F"],normal:["🙂","Okay","#9CC3B3"],high:["⚡️","Good","#5E8C7A"]};
+function carryOver(){var k=dayKey();return S.tasks.filter(function(t){return t.today&&!t.done&&!(t.due&&t.due<=k)&&dayKey(new Date(t.created))<k})}
+function promote(){var k=dayKey(),ch=false;if(S.seenDay!==k&&S.tasks.length&&!carryOver().length){S.seenDay=k;ch=true}S.tasks.forEach(function(t){if(!t.done&&t.due&&t.due<=k&&!t.today){t.today=true;touch(t);ch=true}});return ch}
+var LISTS=["tasks","events","routines","estLog","days"];
 var view="today", openId=null, breaking={}, notice=null, sync="Saved on this phone";
 
 /* ---------- helpers ---------- */
@@ -158,9 +171,14 @@ function merge(a,b){
     return Object.keys(m).map(function(k){return m[k]}).filter(function(t){return !(del[t.id]&&del[t.id]>=(t.mod||0))})
       .sort(function(p,q){return (p.created||0)-(q.created||0)});
   }
-  var newer=(a.updatedAt||0)>=(b.updatedAt||0)?a:b;
-  var out={deleted:del,energy:newer.energy||"normal",welcomed:!!(a.welcomed||b.welcomed),updatedAt:Math.max(a.updatedAt||0,b.updatedAt||0)};
-  LISTS.forEach(function(k){out[k]=ml(a[k],b[k])});
+  var newer=(a.updatedAt||0)>=(b.updatedAt||0)?a:b, older=newer===a?b:a, out={}, k;
+  for(k in older)if(Object.prototype.hasOwnProperty.call(older,k))out[k]=older[k];
+  for(k in newer)if(Object.prototype.hasOwnProperty.call(newer,k))out[k]=newer[k];
+  var keys={};LISTS.forEach(function(x){keys[x]=1});[a,b].forEach(function(s){for(var x in s)if(Array.isArray(s[x]))keys[x]=1});
+  for(k in keys)out[k]=ml(a[k],b[k]);
+  out.deleted=del;out.energy=out.energy||"normal";out.welcomed=!!(a.welcomed||b.welcomed);
+  out.seenDay=(a.seenDay||"")>(b.seenDay||"")?a.seenDay:(b.seenDay||"");
+  out.updatedAt=Math.max(a.updatedAt||0,b.updatedAt||0);
   return out;
 }
 
@@ -168,11 +186,12 @@ function merge(a,b){
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function loadLocal(){try{var r=localStorage.getItem(KEY);if(r){var d=JSON.parse(r);if(d&&d.tasks)S=merge(d,{})}}catch(e){}}
 function tidy(){
-  var cutoff=Date.now()-30*864e5, past=Date.now()-2*864e5, tomb=Date.now()-90*864e5;
+  var cutoff=Date.now()-90*864e5, past=Date.now()-2*864e5, tomb=Date.now()-90*864e5;
   S.tasks=S.tasks.filter(function(t){return !(t.done&&t.doneAt&&t.doneAt<cutoff)});
   S.events=(S.events||[]).filter(function(e){return new Date(e.start).getTime()>past});
   S.estLog=(S.estLog||[]).filter(function(x){return x.at>Date.now()-60*864e5});
   S.routines=S.routines||[];
+  var dcut=dayKey(new Date(Date.now()-180*864e5));S.days=(S.days||[]).filter(function(d){return d.id>=dcut});
   for(var k in S.deleted)if(S.deleted[k]<tomb)delete S.deleted[k];
 }
 var pT=null, syncing=false, again=false;
@@ -191,8 +210,8 @@ function push(){
 function pull(){
   if(!canSync())return;
   api("/state").then(function(m){
-    if(m&&m.tasks){var before=S.tasks.length;S=merge(S,m);tidy();persist();if(!typing())render();
-      var n=S.tasks.length-before;if(n>0)toast(n===1?"1 new thing from your brain dump 🎤":n+" new things from your brain dump 🎤");}
+    if(m&&m.tasks){var before=S.tasks.length;S=merge(S,m);tidy();if(promote())S.updatedAt=Date.now();persist();if(!typing())render();
+      var n=S.tasks.length-before;if(n>0&&before>0)toast(n===1?"1 new thing from your brain dump 🎤":n+" new things from your brain dump 🎤");}
     setSync("Synced ✓");
     push();
   },function(){setSync("Offline: saved on this phone")});
@@ -252,6 +271,8 @@ function taskCard(t,ctx){
   h+='<div class="ttl'+(t.done?" doneTxt":"")+'" data-a="open" data-id="'+t.id+'">'+esc(t.title);
   var meta=[];if(t.est)meta.push(estLabel(t.est));if(t.effort)meta.push(EFFORT[t.effort]);if(steps.length)meta.push(dn+" of "+steps.length+" steps");
   if(t.routine&&!t.done)meta.unshift("Routine");
+  if(t.repeat&&!t.done)meta.unshift("🔁 "+repLabel(t.repeat));
+  if(isLater(t))meta.unshift(niceDate(t.due));
   if(meta.length&&!t.done)h+='<div class="meta">'+esc(meta.join(" · "))+'</div>';
   if(steps.length&&!t.done)h+='<div class="bar"><i style="width:'+Math.round(dn/steps.length*100)+'%"></i></div>';
   h+='</div>';
@@ -270,7 +291,11 @@ function taskCard(t,ctx){
     ["easy","med","big"].forEach(function(k){h+='<button class="chip'+(t.effort===k?" on":"")+'" data-a="effort" data-id="'+t.id+'" data-v="'+k+'">'+EFFORT[k]+'</button>'});
     h+='</div><div class="chips indent"><span class="small" style="align-self:center;margin-right:2px">Takes about</span>';
     ESTS.forEach(function(m){h+='<button class="chip'+(t.est===m?" on":"")+'" data-a="est" data-id="'+t.id+'" data-v="'+m+'">'+estLabel(m)+'</button>'});
-    h+='</div><div class="actions indent">';
+    h+='</div><div class="chips indent"><span class="small" style="align-self:center;margin-right:2px">Repeats</span>';
+    REPEATS.forEach(function(r){h+='<button class="chip'+(t.repeat===r[0]?" on":"")+'" data-a="repeat" data-id="'+t.id+'" data-v="'+r[0]+'">'+r[1]+'</button>'});
+    h+='</div>';
+    if(t.repeat||t.due)h+='<div class="indent" style="margin-top:8px;display:flex;gap:8px;align-items:center"><span class="small">'+(t.repeat?"Next on":"Show on")+'</span><input type="date" class="dueIn" data-id="'+t.id+'" value="'+esc(t.due||dayKey())+'" style="max-width:180px;padding:8px 10px;font-size:15px" aria-label="Date"></div>';
+    h+='<div class="actions indent">';
     if(canSync())h+='<button class="pill lav" data-a="breakdown" data-id="'+t.id+'"'+(breaking[t.id]?" disabled":"")+'>'+(breaking[t.id]?'<span class="spin">✳︎</span> Thinking…':"✨ Break it down")+'</button>';
     h+='<button class="pill" data-a="focus" data-id="'+t.id+'">⏱ Focus</button>';
     if(ctx==="today")h+='<button class="pill warm" data-a="notToday" data-id="'+t.id+'">Not today</button>';
@@ -285,7 +310,7 @@ function renderToday(){
   var greet=hr<12?"Good morning":hr<17?"Good afternoon":"Good evening";
   var today=S.tasks.filter(function(t){return t.today&&!t.done}).sort(function(a,b){return (a.order||999)-(b.order||999)||a.created-b.created});
   var doneToday=S.tasks.filter(function(t){return t.done&&t.doneAt&&dayKey(new Date(t.doneAt))===dayKey()});
-  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done});
+  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done&&!isLater(t)});
   var h='<h1>'+greet+' '+(hr<17?"☀️":"🌙")+'</h1><p class="sub">'+now.toLocaleDateString([], {weekday:"long",month:"long",day:"numeric"})+'</p>';
 
   if(!S.welcomed&&CFG.welcome){
@@ -303,7 +328,7 @@ function renderToday(){
     var mins=Math.round((new Date(nx.start)-now)/60000);
     var when=mins<=90?"in "+mins+" min":"at "+fmtTime(new Date(nx.start));
     h+='<div class="banner lav">🗓<div><b>'+esc(nx.title||"Event")+'</b> '+when+'.';
-    var fits=mins>=10&&mins<=120?S.tasks.filter(function(t){return !t.done&&t.est&&t.est<=mins-5})
+    var fits=mins>=10&&mins<=120?S.tasks.filter(function(t){return !t.done&&!isLater(t)&&t.est&&t.est<=mins-5})
       .sort(function(a,b){return (b.today?1:0)-(a.today?1:0)||b.est-a.est}).slice(0,2):[];
     if(fits.length){
       h+='<br><span class="small">Fits before then:</span><span class="chips" style="margin-top:4px">';
@@ -313,10 +338,13 @@ function renderToday(){
     if(mins<15)h+='<br><span class="small">Good moment to start wrapping up and get ready.</span>';
     h+='</div></div>';
   }
+  var carry=S.seenDay!==dayKey()?carryOver():[];
+  if(carry.length)h+='<div class="banner green">🌅<div><b>New day!</b> '+carry.length+' thing'+(carry.length===1?' is':'s are')+' still on Today from before.<div class="actions" style="margin-top:8px"><button class="pill solid" data-a="keepCarry">Keep '+(carry.length===1?'it':'them')+'</button><button class="pill" data-a="freshStart">Start fresh</button></div><span class="small">Start fresh moves them back to your Brain dump. Nothing gets deleted.</span></div></div>';
   if(estInsight()==="more")h+='<div class="banner warm">⏳<div>Things have been taking longer than you guess lately. Totally normal! Try padding your time estimates a bit.</div></div>';
 
-  h+='<div class="st">How\'s your energy?</div><div class="seg">';
-  [["low","🪫 Low"],["normal","🙂 Okay"],["high","⚡️ Good"]].forEach(function(e){h+='<button class="'+(S.energy===e[0]?"on":"")+'" data-a="energy" data-v="'+e[0]+'">'+e[1]+'</button>'});
+  var E=energyNow();
+  h+='<div class="st">How\'s your energy today?</div><div class="seg">';
+  [["low","🪫 Low"],["normal","🙂 Okay"],["high","⚡️ Good"]].forEach(function(e){h+='<button class="'+(E===e[0]?"on":"")+'" data-a="energy" data-v="'+e[0]+'">'+e[1]+'</button>'});
   h+='</div>';
 
   if(canSync()&&(today.length+inbox.length)>0){
@@ -337,32 +365,39 @@ function renderToday(){
   else today.forEach(function(t){h+=taskCard(t,"today")});
   if(today.length>=5)h+='<div class="banner warm">🌿<div>That\'s a full plate. Anything that could wait until tomorrow?</div></div>';
 
-  var allowed=S.energy==="low"?["easy"]:S.energy==="normal"?["easy","med",undefined,""]:null;
+  var EN=E||"normal";
+  var allowed=EN==="low"?["easy"]:EN==="normal"?["easy","med",undefined,""]:null;
   var o={easy:0,med:1,big:2};
   var sugg=inbox.filter(function(t){return !allowed||allowed.indexOf(t.effort)>=0})
     .sort(function(a,b){return (o[a.effort]==null?1:o[a.effort])-(o[b.effort]==null?1:o[b.effort])||a.created-b.created}).slice(0,3);
   if(today.length<5&&sugg.length){
-    h+='<div class="st">'+(S.energy==="low"?"Gentle picks for a low day":"Could fit today")+'</div>';
+    h+='<div class="st">'+(EN==="low"?"Gentle picks for a low day":"Could fit today")+'</div>';
     sugg.forEach(function(t){h+=taskCard(t,"inbox")});
-  }else if(S.energy==="low"&&inbox.length&&!sugg.length&&today.length<5){
+  }else if(EN==="low"&&inbox.length&&!sugg.length&&today.length<5){
     h+='<div class="banner green">🪫<div>Low-energy day. Tag a few tasks as <b>Easy</b> in your Brain dump and they\'ll show up here.<br><span class="small">Rest counts as productive, too.</span></div></div>';
   }
   if(doneToday.length){
-    h+='<div class="st"><span>Done today 🌱</span><span>'+doneToday.length+'</span></div>';
-    doneToday.forEach(function(t){h+=taskCard(t,"done")});
+    h+='<div class="actions" style="justify-content:center;margin-top:18px"><button class="pill ghost" data-a="showDone">🌱 '+doneToday.length+' done today · '+(showDone?"hide":"show")+'</button></div>';
+    if(showDone)doneToday.forEach(function(t){h+=taskCard(t,"done")});
   }
+  h+='<div class="actions" style="justify-content:center;margin-top:10px"><button class="pill lav" data-a="nav" data-v="days">📅 Your days</button></div>';
   h+='<p class="foot"><span id="syncnote">'+esc(sync)+'</span></p>';
   return h;
 }
 
 function renderInbox(){
-  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done}).sort(function(a,b){return b.created-a.created});
+  var inbox=S.tasks.filter(function(t){return !t.today&&!t.done&&!isLater(t)}).sort(function(a,b){return b.created-a.created});
+  var later=S.tasks.filter(isLater).sort(function(a,b){return a.due<b.due?-1:a.due>b.due?1:0});
   var h='<h1>Brain dump 🧠</h1><p class="sub">Get it out of your head. No dates, no sorting. Just type.</p>';
   h+='<form data-f="dump"><input class="dump" type="text" id="dumpIn" placeholder="What\'s on your mind?" aria-label="New task" autocomplete="off" enterkeyhint="done"></form>';
   h+='<p class="small" style="margin:8px 4px 0">Tip: tap the 🎤 on your keyboard to say it instead'+(canSync()?", or press your Action Button from anywhere.":".")+'</p>';
   h+='<div class="st"><span>Everything else</span><span>'+inbox.length+'</span></div>';
   if(!inbox.length)h+='<div class="card empty">Your list is empty. Enjoy that. ✨</div>';
   inbox.forEach(function(t){h+=taskCard(t,"inbox")});
+  if(later.length){
+    h+='<div class="st"><span>Coming up 🔁</span><span>'+later.length+'</span></div><p class="small" style="margin:-4px 4px 10px">These pop onto Today by themselves on their day.</p>';
+    later.forEach(function(t){h+=taskCard(t,"later")});
+  }
   return h;
 }
 
@@ -412,6 +447,31 @@ function renderRoutines(){
   return h;
 }
 
+function renderDays(){
+  var k0=dayKey(), list=[], byDay={};
+  S.tasks.forEach(function(t){if(t.done&&t.doneAt){var k=dayKey(new Date(t.doneAt));(byDay[k]=byDay[k]||[]).push(t)}});
+  var h='<button class="pill ghost" data-a="nav" data-v="today" style="padding-left:0">‹ Today</button><h1>Your days 📅</h1><p class="sub">Your energy and everything you finished. It all counts.</p>';
+  h+='<div class="card"><div class="small" style="margin-bottom:10px">Energy, last 14 days</div><div style="display:flex;justify-content:space-between;gap:4px">';
+  for(var i=13;i>=0;i--){var d=new Date();d.setDate(d.getDate()-i);var k=dayKey(d),r=dayRec(k),e=r&&r.energy;
+    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1"><div title="'+(e?ENERGY[e][1]:"Not logged")+'" style="width:18px;height:18px;border-radius:50%;'+(e?'background:'+ENERGY[e][2]:'border:2px dashed var(--line)')+'"></div><span class="small" style="font-size:11px">'+d.toLocaleDateString([], {weekday:"narrow"})+'</span></div>'}
+  h+='</div><div class="small" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">';
+  ["low","normal","high"].forEach(function(e){h+='<span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+ENERGY[e][2]+';margin-right:4px"></span>'+ENERGY[e][1]+'</span>'});
+  h+='</div></div>';
+  for(var j=0;j<60;j++){var dd=new Date();dd.setDate(dd.getDate()-j);var kk=dayKey(dd),rr=dayRec(kk),done=byDay[kk]||[];
+    if(!done.length&&!(rr&&rr.energy))continue;list.push({k:kk,r:rr,done:done})}
+  if(!list.length)h+='<div class="card empty">Once you log your energy or finish something, your days show up here.</div>';
+  list.forEach(function(x){
+    var open=openId==="day-"+x.k, e=x.r&&x.r.energy;
+    h+='<div class="card"><div class="task" data-a="open" data-id="day-'+x.k+'" style="cursor:pointer;align-items:center"><div class="ttl">'+(x.k===k0?"Today":niceDate(x.k))+'<div class="meta">'+(e?ENERGY[e][0]+' '+ENERGY[e][1]+' energy':'Energy not logged')+'</div></div><span class="pill" style="pointer-events:none">'+x.done.length+' done</span></div>';
+    if(open){
+      if(!x.done.length)h+='<p class="small" style="margin:10px 0 0">Nothing checked off. Rest days count too.</p>';
+      else{h+='<ul class="steps" style="padding-left:0">';x.done.sort(function(a,b){return a.doneAt-b.doneAt}).forEach(function(t){h+='<li><span>✓ '+esc(t.title)+'</span><span class="small" style="flex:none">'+fmtTime(new Date(t.doneAt))+'</span></li>'});h+='</ul>'}
+    }
+    h+='</div>';
+  });
+  return h;
+}
+
 function renderSettings(){
   var h='<h1>Settings ⚙︎</h1><p class="sub">Behind-the-scenes stuff. You can ignore this page.</p>';
   h+='<div class="st">Connection</div><div class="card"><p class="small" style="margin:0 0 10px">Status: <b id="syncnote">'+esc(canSync()?sync:(APPKEY?"Server address missing in config.js":"No key yet"))+'</b></p>';
@@ -428,19 +488,19 @@ function renderSettings(){
     h+='Last '+log.length+' tasks: <b>'+c.less+'</b> quicker, <b>'+c.same+'</b> about right, <b>'+c.more+'</b> longer than guessed.';
     var ins=estInsight();if(ins==="same")h+='<br>Your guesses have been spot on lately. 🎯';if(ins==="more")h+='<br>Try padding estimates a little. Everyone underestimates!';}
   h+='</p></div>';
-  h+='<p class="foot">Breathing Room v1.1 · made with love</p>';
+  h+='<p class="foot">Breathing Room v1.3 · made with love</p>';
   return h;
 }
 
 function render(){
   var a=document.activeElement, keepDump=a&&a.id==="dumpIn", dumpVal=keepDump?a.value:null;
   var app=document.getElementById("app");
-  app.innerHTML=view==="today"?renderToday():view==="inbox"?renderInbox():view==="cal"?renderCal():view==="rt"?renderRoutines():renderSettings();
+  app.innerHTML=view==="today"?renderToday():view==="inbox"?renderInbox():view==="cal"?renderCal():view==="rt"?renderRoutines():view==="days"?renderDays():renderSettings();
   if(keepDump){var d=document.getElementById("dumpIn");if(d){d.value=dumpVal;d.focus()}}
-  var inboxN=S.tasks.filter(function(t){return !t.today&&!t.done}).length;
+  var inboxN=S.tasks.filter(function(t){return !t.today&&!t.done&&!isLater(t)}).length;
   var nav=[["today","☀️","Today"],["inbox","🧠","Brain dump"],["rt","🔁","Routines"],["cal","🗓","Calendar"],["set","⚙︎","Settings"]];
   document.getElementById("nav").innerHTML=nav.map(function(n){
-    return '<button class="'+(view===n[0]?"on":"")+'" data-a="nav" data-v="'+n[0]+'"><b>'+n[1]+'</b><span>'+n[2]+(n[0]==="inbox"&&inboxN?'<span class="badge">'+inboxN+'</span>':"")+'</span></button>';
+    return '<button class="'+(view===n[0]||(view==="days"&&n[0]==="today")?"on":"")+'" data-a="nav" data-v="'+n[0]+'"><b>'+n[1]+'</b><span>'+n[2]+(n[0]==="inbox"&&inboxN?'<span class="badge">'+inboxN+'</span>':"")+'</span></button>';
   }).join("");
 }
 
@@ -453,8 +513,8 @@ function askEst(t){
 }
 function planDay(){
   if(planning||!canSync())return;planning=true;render();
-  var now=new Date(), pool=S.tasks.filter(function(t){return !t.done}).slice(-30);
-  var body={now:now.toLocaleString([], {weekday:"long",hour:"numeric",minute:"2-digit"}),energy:S.energy,
+  var now=new Date(), pool=S.tasks.filter(function(t){return !t.done&&!isLater(t)}).slice(-30);
+  var body={now:now.toLocaleString([], {weekday:"long",hour:"numeric",minute:"2-digit"}),energy:energyNow()||"normal",
     events:todaysEvents().filter(function(e){return e.allDay||new Date(e.start)>now}).map(function(e){return{title:e.title,time:e.allDay?"all day":fmtTime(new Date(e.start))}}),
     tasks:pool.map(function(t){return{id:t.id,title:t.title,effort:t.effort||"",minutes:t.est||0,onToday:!!t.today,steps:(t.steps||[]).length}})};
   api("/plan","POST",body).then(function(r){
@@ -509,10 +569,16 @@ document.addEventListener("click",function(ev){
     case "open":openId=openId===id?null:id;render();break;
     case "toggle":
       if(!t)break;t.done=!t.done;t.doneAt=t.done?Date.now():null;touch(t);
-      if(t.done){var r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2);toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);if(openId===id)openId=null;
+      if(t.done){var r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2);if(openId===id)openId=null;
+        if(t.repeat){var nx2=newTask(t.title);nx2.repeat=t.repeat;nx2.due=nextDue(t);nx2.effort=t.effort;nx2.est=t.est;
+          nx2.steps=(t.steps||[]).map(function(x){return{t:x.t,done:false}});S.tasks.push(nx2);t.nextId=nx2.id;
+          toast("Done! Next one shows up "+niceDate(nx2.due)+".")}
+        else toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);
         if(t.est)setTimeout(function(){askEst(t)},900)}
-      else t.today=true;
+      else{t.today=true;if(t.nextId){var nn=byId(t.nextId);if(nn&&!nn.done)removeItem("tasks",nn.id);t.nextId=null}}
       save();break;
+    case "showDone":showDone=!showDone;render();break;
+    case "repeat":if(t){t.repeat=t.repeat===v?"":v;if(t.repeat&&!t.due)t.due=dayKey();if(!t.repeat&&t.due&&t.due<=dayKey())t.due="";touch(t);save()}break;
     case "est":if(t){var ev2=+v;t.est=t.est===ev2?0:ev2;touch(t);save()}break;
     case "estFb":
       document.getElementById("modal").innerHTML="";
@@ -546,7 +612,9 @@ document.addEventListener("click",function(ev){
     case "delStep":if(t){t.steps.splice(+el.getAttribute("data-i"),1);touch(t);save()}break;
     case "breakdown":if(t)breakdown(t);break;
     case "focus":if(t)openTimer(t);break;
-    case "energy":S.energy=v;save();break;
+    case "energy":setEnergy(v);save();break;
+    case "keepCarry":S.seenDay=dayKey();save();toast("Kept. Pick just one to start.");break;
+    case "freshStart":carryOver().forEach(function(t){t.today=false;t.order=0;touch(t)});S.seenDay=dayKey();save();toast("Fresh start. Everything's waiting in your Brain dump.");break;
     case "welcomeOk":S.welcomed=true;save();break;
     case "delEv":removeItem("events",id);save();break;
     case "syncNow":setSync("Syncing…");pull();break;
@@ -592,6 +660,11 @@ document.addEventListener("submit",function(ev){
       S=merge(S,d2);S.updatedAt=now;tidy();save();toast("Restored ✓");}catch(e){toast("That doesn't look like a backup.")}}
 });
 document.addEventListener("change",function(ev){
+  if(ev.target.classList&&ev.target.classList.contains("dueIn")){
+    var dt=byId(ev.target.getAttribute("data-id")), dv=ev.target.value;
+    if(dt&&/^\d{4}-\d{2}-\d{2}$/.test(dv)){dt.due=dv;if(dv>dayKey()){dt.today=false;toast("It'll pop onto Today on "+niceDate(dv)+".")}else dt.today=true;touch(dt);save()}
+    return;
+  }
   if(ev.target.id!=="ics")return;
   var file=ev.target.files&&ev.target.files[0];if(!file)return;
   var rd=new FileReader();
@@ -611,11 +684,11 @@ document.addEventListener("change",function(ev){
   };
   rd.readAsText(file);
 });
-document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(!typing())render();pull()}});
-setInterval(function(){if(view!=="inbox"&&view!=="set"&&!typing()&&document.visibilityState==="visible")render()},60000);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(promote())save();else if(!typing())render();pull()}});
+setInterval(function(){if(document.visibilityState!=="visible")return;if(promote()){save();return}if(view!=="inbox"&&view!=="set"&&!typing())render()},60000);
 
 /* ---------- start ---------- */
-loadLocal();tidy();
+loadLocal();tidy();if(promote())S.updatedAt=Date.now();
 try{var qs=new URLSearchParams(location.search), add=qs.get("add");if(add&&add.trim()){S.tasks.push(newTask(add.trim()));S.updatedAt=Date.now();persist();setTimeout(function(){toast("Added to your brain dump ✓")},300)}
   if(qs.has("add")){qs.delete("add");var qq=qs.toString();history.replaceState(null,"",location.pathname+(qq?"?"+qq:""))}}catch(e){}
 render();pull();
