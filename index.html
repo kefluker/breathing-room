@@ -105,11 +105,74 @@ var API=String(CFG.api||"").replace(/\/+$/,"");
 var KEY="breathing-room-v1", KEYK="breathing-room-key";
 var S={tasks:[],events:[],routines:[],estLog:[],days:[],deleted:{},energy:"normal",welcomed:false,seenDay:"",updatedAt:0};
 var plan=null, planning=false, showDone=false;
-var REPEATS=[["d1","Daily"],["w1","Weekly"],["w2","Every 2 weeks"],["m1","Monthly"]];
-function repLabel(r){for(var i=0;i<REPEATS.length;i++)if(REPEATS[i][0]===r)return REPEATS[i][1];return""}
+var REPEATS=[["d1","Daily"],["wd","Weekdays"],["w1","Weekly"],["w2","Every 2 weeks"],["m1","Monthly"],["y1","Yearly"],["dow","Pick days"]];
+var DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function repLabel(r,t){if(r==="dow"){var ds=(t&&t.dows||[]).slice().sort();return ds.length?ds.map(function(i){return DOW[i]}).join(", "):"Pick days"}
+  if(r==="w2"&&t&&t.due)return"Every other "+DOW[keyToDate(t.due).getDay()];
+  if(r==="w1"&&t&&t.due)return"Every "+DOW[keyToDate(t.due).getDay()];
+  for(var i=0;i<REPEATS.length;i++)if(REPEATS[i][0]===r)return REPEATS[i][1];return""}
 function keyToDate(k){var p=String(k).split("-");return new Date(+p[0],p[1]-1,+p[2])}
-function stepDate(k,r){var d=keyToDate(k);if(r==="d1")d.setDate(d.getDate()+1);else if(r==="w1")d.setDate(d.getDate()+7);else if(r==="w2")d.setDate(d.getDate()+14);else if(r==="m1")d.setMonth(d.getMonth()+1);return dayKey(d)}
-function nextDue(t){var k=stepDate(t.due||dayKey(),t.repeat),today=dayKey(),guard=0;while(k<=today&&guard++<400)k=stepDate(k,t.repeat);return k}
+function addMonths(k,n,anchor){var d=keyToDate(k),y=d.getFullYear(),m=d.getMonth()+n;y+=Math.floor(m/12);m=((m%12)+12)%12;
+  var last=new Date(y,m+1,0).getDate();return dayKey(new Date(y,m,Math.min(anchor||d.getDate(),last)))}
+function fitsDay(k,t){var w=keyToDate(k).getDay();if(t.repeat==="wd")return w>0&&w<6;if(t.repeat==="dow")return (t.dows||[]).indexOf(w)>=0;return true}
+function stepDate(k,t){var r=t.repeat,d=keyToDate(k);
+  if(r==="d1"){d.setDate(d.getDate()+1);return dayKey(d)}
+  if(r==="w1"){d.setDate(d.getDate()+7);return dayKey(d)}
+  if(r==="w2"){d.setDate(d.getDate()+14);return dayKey(d)}
+  if(r==="m1")return addMonths(k,1,t.anchor);
+  if(r==="y1")return addMonths(k,12,t.anchor);
+  if(r==="wd"||r==="dow"){if(r==="dow"&&!(t.dows||[]).length){d.setDate(d.getDate()+7);return dayKey(d)}
+    for(var i=0;i<8;i++){d.setDate(d.getDate()+1);if(fitsDay(dayKey(d),t))return dayKey(d)}}
+  d.setDate(d.getDate()+1);return dayKey(d)}
+function firstFit(k,t){var g=0;while(!fitsDay(k,t)&&g++<8){var d=keyToDate(k);d.setDate(d.getDate()+1);k=dayKey(d)}return k}
+function nextDue(t){var k=stepDate(t.due||dayKey(),t),today=dayKey(),guard=0;while(k<=today&&guard++<800)k=stepDate(k,t);return k}
+
+/* ---------- reading "every other Friday", "on Dec 5", "tomorrow" ---------- */
+var PARSE_SINCE=1795746800000;
+var DAYRX="(sun(?:day)?|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?)";
+var MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+var MONRX="(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+function dayIdx(w){return["sun","mon","tue","wed","thu","fri","sat"].indexOf(w.slice(0,3))}
+function nextWeekday(i,includeToday){var d=new Date();if(!includeToday)d.setDate(d.getDate()+1);for(var g=0;g<7&&d.getDay()!==i;g++)d.setDate(d.getDate()+1);return dayKey(d)}
+function dateFrom(mo,day){var n=new Date(),d=new Date(n.getFullYear(),mo,day);if(dayKey(d)<dayKey(n))d=new Date(n.getFullYear()+1,mo,day);return dayKey(d)}
+function parseWhen(title){
+  var t=" "+title+" ",o={},m,rx;
+  function cut(r){t=t.replace(r," ")}
+  rx=new RegExp("\\s(?:every|each)\\s+(other\\s+)?"+DAYRX+"((?:\\s*(?:,|and|&)\\s*"+DAYRX+")*)s?(?=[\\s,.!?])","i");
+  if((m=t.match(rx))){var days=[dayIdx(m[2].toLowerCase())];
+    (m[3]||"").replace(new RegExp(DAYRX,"gi"),function(w){days.push(dayIdx(w.toLowerCase()))});
+    days=days.filter(function(x,i,a){return x>=0&&a.indexOf(x)===i});
+    if(days.length>1&&!m[1]){o.repeat="dow";o.dows=days}else{o.repeat=m[1]?"w2":"w1"}
+    o.due=o.repeat==="dow"?null:nextWeekday(days[0],true);cut(rx)}
+  if(!o.repeat){
+    var R=[[/\s(every\s+weekday|weekdays\s+only|on\s+weekdays)(?=[\s,.!?])/i,"wd"],[/\s(every\s+day|daily|every\s+morning|every\s+night|every\s+evening)(?=[\s,.!?])/i,"d1"],
+      [/\s(every\s+other\s+week|biweekly|bi-weekly|every\s+(?:2|two)\s+weeks)(?=[\s,.!?])/i,"w2"],[/\s(every\s+week|weekly)(?=[\s,.!?])/i,"w1"],
+      [/\s(every\s+month|monthly)(?=[\s,.!?])/i,"m1"],[/\s(every\s+year|yearly|annually)(?=[\s,.!?])/i,"y1"]];
+    for(var i=0;i<R.length;i++)if(R[i][0].test(t)){o.repeat=R[i][1];cut(R[i][0]);break}
+  }
+  rx=new RegExp("\\s(?:on\\s+)?"+MONRX+"\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?=[\\s,.!?])","i");
+  if((m=t.match(rx))){o.due=dateFrom(MONTHS.indexOf(m[1].slice(0,3).toLowerCase()),+m[2]);cut(rx)}
+  else if((m=t.match(/\s(?:on\s+)?(\d{1,2})\/(\d{1,2})(?=[\s,.!?])/))&&+m[1]<=12){o.due=dateFrom(+m[1]-1,+m[2]);cut(/\s(?:on\s+)?\d{1,2}\/\d{1,2}(?=[\s,.!?])/)}
+  else if((m=t.match(/\son\s+the\s+(\d{1,2})(?:st|nd|rd|th)(?=[\s,.!?])/i))){var n=new Date(),dd=+m[1],c=new Date(n.getFullYear(),n.getMonth(),dd);if(dayKey(c)<dayKey(n))c=new Date(n.getFullYear(),n.getMonth()+1,dd);o.due=dayKey(c);if(!o.repeat)o.repeat=o.repeat;cut(/\son\s+the\s+\d{1,2}(?:st|nd|rd|th)(?=[\s,.!?])/i)}
+  if(!o.due&&!o.repeat){
+    if(/\stomorrow(?=[\s,.!?])/i.test(t)){var tm=new Date();tm.setDate(tm.getDate()+1);o.due=dayKey(tm);cut(/\stomorrow(?=[\s,.!?])/i)}
+    else if((m=t.match(new RegExp("\\s(?:on|next|this)\\s+"+DAYRX+"(?=[\\s,.!?])","i")))){o.due=nextWeekday(dayIdx(m[1].toLowerCase()),false);cut(new RegExp("\\s(?:on|next|this)\\s+"+DAYRX+"(?=[\\s,.!?])","i"))}
+    else if(/\stoday(?=[\s,.!?])/i.test(t)){o.today=true;cut(/\stoday(?=[\s,.!?])/i)}
+  }
+  if(!o.repeat&&!o.due&&!o.today)return null;
+  var clean=t.replace(/\s+/g," ").replace(/\s+([,.!?])/g,"$1").replace(/^[\s,.\-–]+|[\s,\-–]+$/g,"").trim();
+  o.title=clean||title;return o;
+}
+function applyWhen(x){
+  x.parsed=true;var o=parseWhen(x.title||"");if(!o)return false;
+  x.title=o.title;if(o.repeat){x.repeat=o.repeat;if(o.dows)x.dows=o.dows}
+  if(o.due)x.due=o.due;else if(x.repeat)x.due=dayKey();
+  if(x.repeat&&(x.repeat==="wd"||x.repeat==="dow"))x.due=firstFit(x.due,x);
+  if(x.repeat==="m1"||x.repeat==="y1")x.anchor=keyToDate(x.due).getDate();
+  if(o.today||(x.due&&x.due<=dayKey()))x.today=true;else if(x.due)x.today=false;
+  x.mod=Date.now();return true;
+}
+function parseNew(){var ch=false;S.tasks.forEach(function(x){if(!x.parsed&&!x.done&&!x.routine&&(x.created||0)>=PARSE_SINCE){if(applyWhen(x))ch=true;else{x.parsed=true;x.mod=Date.now();ch=true}}});return ch}
 function isLater(t){return !!(t.due&&t.due>dayKey()&&!t.done)}
 function niceDate(k){var d=keyToDate(k),diff=Math.round((d-keyToDate(dayKey()))/864e5);if(diff===1)return"Tomorrow";if(diff===-1)return"Yesterday";return d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})}
 function dayRec(k){for(var i=0;i<(S.days||[]).length;i++)if(S.days[i].id===k)return S.days[i];return null}
@@ -210,7 +273,7 @@ function push(){
 function pull(){
   if(!canSync())return;
   api("/state").then(function(m){
-    if(m&&m.tasks){var before=S.tasks.length;S=merge(S,m);tidy();if(promote())S.updatedAt=Date.now();persist();if(!typing())render();
+    if(m&&m.tasks){var before=S.tasks.length;S=merge(S,m);tidy();var pz2=parseNew();if(promote()||pz2)S.updatedAt=Date.now();persist();if(!typing())render();
       var n=S.tasks.length-before;if(n>0&&before>0)toast(n===1?"1 new thing from your brain dump 🎤":n+" new things from your brain dump 🎤");}
     setSync("Synced ✓");
     push();
@@ -271,7 +334,7 @@ function taskCard(t,ctx){
   h+='<div class="ttl'+(t.done?" doneTxt":"")+'" data-a="open" data-id="'+t.id+'">'+esc(t.title);
   var meta=[];if(t.est)meta.push(estLabel(t.est));if(t.effort)meta.push(EFFORT[t.effort]);if(steps.length)meta.push(dn+" of "+steps.length+" steps");
   if(t.routine&&!t.done)meta.unshift("Routine");
-  if(t.repeat&&!t.done)meta.unshift("🔁 "+repLabel(t.repeat));
+  if(t.repeat&&!t.done)meta.unshift("🔁 "+repLabel(t.repeat,t));
   if(isLater(t))meta.unshift(niceDate(t.due));
   if(meta.length&&!t.done)h+='<div class="meta">'+esc(meta.join(" · "))+'</div>';
   if(steps.length&&!t.done)h+='<div class="bar"><i style="width:'+Math.round(dn/steps.length*100)+'%"></i></div>';
@@ -291,10 +354,13 @@ function taskCard(t,ctx){
     ["easy","med","big"].forEach(function(k){h+='<button class="chip'+(t.effort===k?" on":"")+'" data-a="effort" data-id="'+t.id+'" data-v="'+k+'">'+EFFORT[k]+'</button>'});
     h+='</div><div class="chips indent"><span class="small" style="align-self:center;margin-right:2px">Takes about</span>';
     ESTS.forEach(function(m){h+='<button class="chip'+(t.est===m?" on":"")+'" data-a="est" data-id="'+t.id+'" data-v="'+m+'">'+estLabel(m)+'</button>'});
+    h+='</div><div class="indent" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="small">'+(t.repeat?"Next on":"Do it on")+'</span><input type="date" class="dueIn" data-id="'+t.id+'" value="'+esc(t.due||"")+'" style="max-width:170px;padding:8px 10px;font-size:15px" aria-label="Date">';
+    if(!t.repeat){h+='<button class="chip" data-a="quickDay" data-id="'+t.id+'" data-v="1">Tomorrow</button>';if(t.due)h+='<button class="chip" data-a="clearDay" data-id="'+t.id+'">Anytime</button>'}
     h+='</div><div class="chips indent"><span class="small" style="align-self:center;margin-right:2px">Repeats</span>';
     REPEATS.forEach(function(r){h+='<button class="chip'+(t.repeat===r[0]?" on":"")+'" data-a="repeat" data-id="'+t.id+'" data-v="'+r[0]+'">'+r[1]+'</button>'});
     h+='</div>';
-    if(t.repeat||t.due)h+='<div class="indent" style="margin-top:8px;display:flex;gap:8px;align-items:center"><span class="small">'+(t.repeat?"Next on":"Show on")+'</span><input type="date" class="dueIn" data-id="'+t.id+'" value="'+esc(t.due||dayKey())+'" style="max-width:180px;padding:8px 10px;font-size:15px" aria-label="Date"></div>';
+    if(t.repeat==="dow"){h+='<div class="chips indent"><span class="small" style="align-self:center;margin-right:2px">On</span>';
+      DOW.forEach(function(dn,i){h+='<button class="chip'+((t.dows||[]).indexOf(i)>=0?" on":"")+'" data-a="dowToggle" data-id="'+t.id+'" data-v="'+i+'">'+dn+'</button>'});h+='</div>'}
     h+='<div class="actions indent">';
     if(canSync())h+='<button class="pill lav" data-a="breakdown" data-id="'+t.id+'"'+(breaking[t.id]?" disabled":"")+'>'+(breaking[t.id]?'<span class="spin">✳︎</span> Thinking…':"✨ Break it down")+'</button>';
     h+='<button class="pill" data-a="focus" data-id="'+t.id+'">⏱ Focus</button>';
@@ -390,7 +456,7 @@ function renderInbox(){
   var later=S.tasks.filter(isLater).sort(function(a,b){return a.due<b.due?-1:a.due>b.due?1:0});
   var h='<h1>Brain dump 🧠</h1><p class="sub">Get it out of your head. No dates, no sorting. Just type.</p>';
   h+='<form data-f="dump"><input class="dump" type="text" id="dumpIn" placeholder="What\'s on your mind?" aria-label="New task" autocomplete="off" enterkeyhint="done"></form>';
-  h+='<p class="small" style="margin:8px 4px 0">Tip: tap the 🎤 on your keyboard to say it instead'+(canSync()?", or press your Action Button from anywhere.":".")+'</p>';
+  h+='<p class="small" style="margin:8px 4px 0">Tip: tap the 🎤 on your keyboard to say it instead'+(canSync()?", or press your Action Button from anywhere.":".")+'<br>Add when, and it schedules itself: <i>"tomorrow"</i>, <i>"on Dec 5"</i>, <i>"every other Friday"</i>, <i>"every Mon and Thu"</i>, <i>"yearly on March 3"</i>.</p>';
   h+='<div class="st"><span>Everything else</span><span>'+inbox.length+'</span></div>';
   if(!inbox.length)h+='<div class="card empty">Your list is empty. Enjoy that. ✨</div>';
   inbox.forEach(function(t){h+=taskCard(t,"inbox")});
@@ -488,7 +554,7 @@ function renderSettings(){
     h+='Last '+log.length+' tasks: <b>'+c.less+'</b> quicker, <b>'+c.same+'</b> about right, <b>'+c.more+'</b> longer than guessed.';
     var ins=estInsight();if(ins==="same")h+='<br>Your guesses have been spot on lately. 🎯';if(ins==="more")h+='<br>Try padding estimates a little. Everyone underestimates!';}
   h+='</p></div>';
-  h+='<p class="foot">Breathing Room v1.3 · made with love</p>';
+  h+='<p class="foot">Breathing Room v1.4 · made with love</p>';
   return h;
 }
 
@@ -570,7 +636,7 @@ document.addEventListener("click",function(ev){
     case "toggle":
       if(!t)break;t.done=!t.done;t.doneAt=t.done?Date.now():null;touch(t);
       if(t.done){var r=el.getBoundingClientRect();burst(r.left+r.width/2,r.top+r.height/2);if(openId===id)openId=null;
-        if(t.repeat){var nx2=newTask(t.title);nx2.repeat=t.repeat;nx2.due=nextDue(t);nx2.effort=t.effort;nx2.est=t.est;
+        if(t.repeat){var nx2=newTask(t.title);nx2.parsed=true;nx2.repeat=t.repeat;nx2.dows=t.dows;nx2.anchor=t.anchor;nx2.due=nextDue(t);nx2.effort=t.effort;nx2.est=t.est;
           nx2.steps=(t.steps||[]).map(function(x){return{t:x.t,done:false}});S.tasks.push(nx2);t.nextId=nx2.id;
           toast("Done! Next one shows up "+niceDate(nx2.due)+".")}
         else toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);
@@ -578,7 +644,16 @@ document.addEventListener("click",function(ev){
       else{t.today=true;if(t.nextId){var nn=byId(t.nextId);if(nn&&!nn.done)removeItem("tasks",nn.id);t.nextId=null}}
       save();break;
     case "showDone":showDone=!showDone;render();break;
-    case "repeat":if(t){t.repeat=t.repeat===v?"":v;if(t.repeat&&!t.due)t.due=dayKey();if(!t.repeat&&t.due&&t.due<=dayKey())t.due="";touch(t);save()}break;
+    case "repeat":if(t){t.repeat=t.repeat===v?"":v;
+        if(t.repeat){if(!t.due)t.due=dayKey();if(t.repeat==="dow"&&!(t.dows||[]).length)t.dows=[keyToDate(t.due).getDay()];
+          t.due=firstFit(t.due,t);if(t.repeat==="m1"||t.repeat==="y1")t.anchor=keyToDate(t.due).getDate();
+          t.today=t.due<=dayKey();toast("Repeats: "+repLabel(t.repeat,t)+". Next: "+(t.due===dayKey()?"today":niceDate(t.due))+".")}
+        else if(t.due&&t.due<=dayKey())t.due="";
+        touch(t);save()}break;
+    case "dowToggle":if(t){var di=+v;t.dows=t.dows||[];var pos=t.dows.indexOf(di);if(pos>=0){if(t.dows.length>1)t.dows.splice(pos,1)}else t.dows.push(di);
+        t.due=firstFit(dayKey(),t);t.today=t.due<=dayKey();touch(t);save()}break;
+    case "quickDay":if(t){var qd=new Date();qd.setDate(qd.getDate()+(+v));t.due=dayKey(qd);t.today=false;touch(t);openId=null;save();toast("Moved to "+niceDate(t.due)+". It'll show up on Today then.")}break;
+    case "clearDay":if(t){t.due="";touch(t);save();toast("No date. It's in your list for whenever.")}break;
     case "est":if(t){var ev2=+v;t.est=t.est===ev2?0:ev2;touch(t);save()}break;
     case "estFb":
       document.getElementById("modal").innerHTML="";
@@ -596,7 +671,7 @@ document.addEventListener("click",function(ev){
     case "addTemplate":var tp=TEMPLATES[+v];if(tp){S.routines.push({id:uid(),title:tp.title,items:tp.items.slice(),created:Date.now(),mod:Date.now()});save();toast("Added "+tp.title+".")}break;
     case "startRoutine":
       var rt=null;S.routines.forEach(function(r){if(r.id===id)rt=r});
-      if(rt){var nt=newTask(rt.title);nt.routine=rt.id;nt.today=true;nt.order=0;nt.steps=rt.items.map(function(x){return{t:x,done:false}});
+      if(rt){var nt=newTask(rt.title);nt.routine=rt.id;nt.parsed=true;nt.today=true;nt.order=0;nt.steps=rt.items.map(function(x){return{t:x,done:false}});
         S.tasks.push(nt);view="today";openId=nt.id;save();window.scrollTo(0,0);toast("Started "+rt.title+". One step at a time.")}
       break;
     case "delItem":S.routines.forEach(function(r){if(r.id===id){r.items.splice(+el.getAttribute("data-i"),1);touch(r)}});save();break;
@@ -636,7 +711,8 @@ document.addEventListener("click",function(ev){
 document.addEventListener("submit",function(ev){
   var f=ev.target, k=f.getAttribute("data-f");if(!k)return;ev.preventDefault();
   if(k==="dump"){var i=document.getElementById("dumpIn"), v=i.value.trim();if(!v)return;
-    S.tasks.push(newTask(v));i.value="";save();
+    var nt0=newTask(v),hit=applyWhen(nt0);S.tasks.push(nt0);i.value="";save();
+    if(hit)toast(nt0.repeat?"Got it: "+repLabel(nt0.repeat,nt0)+(nt0.due&&nt0.due>dayKey()?", starting "+niceDate(nt0.due):"")+".":nt0.due&&nt0.due>dayKey()?"Saved for "+niceDate(nt0.due)+".":"Added to Today.");
     var d=document.getElementById("dumpIn");if(d)d.focus();}
   else if(k==="addStep"){var inp=f.querySelector("input"), sv=inp.value.trim(), t=byId(f.getAttribute("data-id"));if(!sv||!t)return;
     t.steps=t.steps||[];t.steps.push({t:sv,done:false});touch(t);save();
@@ -662,7 +738,8 @@ document.addEventListener("submit",function(ev){
 document.addEventListener("change",function(ev){
   if(ev.target.classList&&ev.target.classList.contains("dueIn")){
     var dt=byId(ev.target.getAttribute("data-id")), dv=ev.target.value;
-    if(dt&&/^\d{4}-\d{2}-\d{2}$/.test(dv)){dt.due=dv;if(dv>dayKey()){dt.today=false;toast("It'll pop onto Today on "+niceDate(dv)+".")}else dt.today=true;touch(dt);save()}
+    if(dt&&!dv&&!dt.repeat){dt.due="";touch(dt);save();return}
+    if(dt&&/^\d{4}-\d{2}-\d{2}$/.test(dv)){dt.due=dt.repeat?firstFit(dv,dt):dv;if(dt.repeat==="m1"||dt.repeat==="y1")dt.anchor=keyToDate(dt.due).getDate();dv=dt.due;if(dv>dayKey()){dt.today=false;toast("It'll pop onto Today on "+niceDate(dv)+".")}else dt.today=true;touch(dt);save()}
     return;
   }
   if(ev.target.id!=="ics")return;
@@ -688,7 +765,7 @@ document.addEventListener("visibilitychange",function(){if(document.visibilitySt
 setInterval(function(){if(document.visibilityState!=="visible")return;if(promote()){save();return}if(view!=="inbox"&&view!=="set"&&!typing())render()},60000);
 
 /* ---------- start ---------- */
-loadLocal();tidy();if(promote())S.updatedAt=Date.now();
+loadLocal();tidy();var pz=parseNew();if(promote()||pz)S.updatedAt=Date.now();
 try{var qs=new URLSearchParams(location.search), add=qs.get("add");if(add&&add.trim()){S.tasks.push(newTask(add.trim()));S.updatedAt=Date.now();persist();setTimeout(function(){toast("Added to your brain dump ✓")},300)}
   if(qs.has("add")){qs.delete("add");var qq=qs.toString();history.replaceState(null,"",location.pathname+(qq?"?"+qq:""))}}catch(e){}
 render();pull();
